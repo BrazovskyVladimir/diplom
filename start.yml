@@ -1,0 +1,21 @@
+- name: DevOpsDiplom
+  hosts: kub
+  user: acd
+  become: true
+  vars:
+    OS: "xUbuntu_22.04"
+    CRIO_VERSION: "1.26"
+    kube_version: "1.26.6"
+    USER_RUN: "acd"
+  roles:
+  #  - docker  
+  #  - kub
+  #  - nginxingress
+  #  - nginxreverseproxy
+    - jenkins
+  #  - prometheus
+  #  - grafana
+  #  - zabbix
+  #  - zabbixconf
+#    - prometheusconf
+  #  - test
