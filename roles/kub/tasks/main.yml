@@ -1,0 +1,191 @@
+---
+- name: Install required packages for Kubernetes
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - software-properties-common
+    state: present
+
+- name: Disable swap
+  command: swapoff -a
+  ignore_errors: yes
+
+- name: Comment out swap entry in /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^(\S+\s+swap\s+)(\S+\s+\S+.*)$'
+    line: '#\1\2'
+    backrefs: yes
+    state: present
+#  notify: Reboot the system
+
+- name: Add kernel modules to k8s.conf
+  copy:
+    content: |
+      overlay
+      br_netfilter
+    dest: /etc/modules-load.d/k8s.conf
+
+- name: Load kernel modules
+  shell: "modprobe {{ item }}"
+  with_items:
+    - overlay
+    - br_netfilter
+
+- name: Configure sysctl settings for Kubernetes
+  copy:
+    content: |
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward = 1
+    dest: /etc/sysctl.d/k8s.conf
+
+- name: Apply sysctl params without reboot
+  command: sysctl --system
+
+- name: Add Google official GPG key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes Repository
+  apt_repository:
+    repo: deb http://apt.kubernetes.io/ kubernetes-xenial main 
+    state: present
+    filename: kubernetes
+    mode: 0600
+
+- name: Install Kubernetes control plane components
+  apt:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+    state: present
+
+
+- name: Initialize Kubernetes control plane
+  shell: |
+    kubeadm init --v=5 \
+      --upload-certs \
+      --control-plane-endpoint 192.168.218.118 \
+      --pod-network-cidr=10.244.0.0/16 \
+      --ignore-preflight-errors=NumCPU \
+      --cri-socket=unix:///var/run/crio/crio.sock
+  args:
+    executable: /bin/bash
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: Enable and start kubelet service
+  service:
+    name: kubelet
+    state: started
+    enabled: yes
+
+- name: Create the .kube directory in the user's home folder
+  file:
+    path: "/home/{{ USER_RUN }}/.kube"
+    state: directory
+    mode: '0755'
+
+- name: Copy the Kubernetes admin.conf to the user's .kube/config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/{{ USER_RUN }}/.kube/config"
+    remote_src: yes
+    mode: '0644'
+
+- name: Create the .kube directory in the user's home folder
+  file:
+    path: "/root/.kube"
+    state: directory
+    mode: '0755'
+
+- name: Copy the Kubernetes admin.conf to the user's .kube/config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/root/.kube/config"
+    remote_src: yes
+    mode: '0644'
+
+- name: Fetch the .kube/config file to the Ansible control host
+  fetch:
+    src: "/home/{{ USER_RUN }}/.kube/config"
+    dest: "./admin.conf"
+    flat: yes
+
+- name: install pip3
+  apt: 
+    name: 
+      - python3-pip 
+    state: present
+
+- name: install pre-requisites
+  pip:
+    name:
+      - openshift
+      - pyyaml
+      - kubernetes
+
+- name: Apply Tigera operator
+  kubernetes.core.k8s:
+    src: https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml
+
+- name: Create the yaml directory in the user's home folder
+  file:
+    path: "/home/acd/yaml"
+    state: directory
+
+- name: Copy yaml to the user's .kube/config
+  template:
+    src: "/home/acd/Desktop/ansible/roles/kub/templates/custom-resources.yaml.j2"
+    dest: "/home/acd/yaml/custom-resources.yaml"
+    mode: '0644'
+
+- name: Create custom resources
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/custom-resources.yaml"
+
+- name: Install helm if not exists
+  unarchive:
+    src: https://get.helm.sh/helm-v3.12.2-linux-amd64.tar.gz
+    dest: /usr/local/bin
+    extra_opts: "--strip-components=1"
+    owner: root
+    group: root
+    mode: 0755
+    remote_src: true
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Taint all nodes with control-plane taint
+  shell: |
+    kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+  args:
+    executable: /bin/bash
+
+- name: Add stable chart repo
+  kubernetes.core.helm_repository:
+    name: csi-driver-nfs
+    repo_url: "https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts"
+
+- name: Install NFS Helm chart
+  shell: |
+    helm install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace kube-system
+  args:
+    executable: /bin/bash
+
+- name: Copy storage class yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/kub/templates/sc.yaml.j2"
+    dest: "/home/acd/yaml/sc.yaml"
+    mode: '0644'
+
+- name: Create custom resources
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/sc.yaml"
+
+

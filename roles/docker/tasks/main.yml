@@ -1,0 +1,40 @@
+---
+- name: Install requirements
+  apt:
+    name: ["apt-transport-https", "ca-certificates", "curl", "gnupg2", "software-properties-common", "net-tools"]
+    state: latest
+
+- name: Import CRI-O repository GPG key for cri-o version
+  shell: "curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:/{{ CRIO_VERSION }}/{{ OS }}/Release.key | sudo apt-key add - "
+  register: cri_o_repo_key_result
+  changed_when: cri_o_repo_key_result.stdout.find('OK') != -1
+
+- name: Import CRI-O repository GPG key for libcontainers
+  shell: "curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{ OS }}/Release.key | sudo apt-key add -"
+  register: libcontainers_repo_key_result
+  changed_when: libcontainers_repo_key_result.stdout.find('OK') != -1
+
+- name: Add cri-o repository 1
+  apt_repository:
+    repo: "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{ OS }}/ /"
+    state: present
+
+- name: Add cri-o repository 2
+  apt_repository:
+    repo: "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/{{ CRIO_VERSION }}/{{ OS }}/ /"
+    state: present
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install cri-o, cri-o-runc, cri-tools
+  apt:
+    name: ["cri-o", "cri-o-runc", "cri-tools"]
+    state: latest
+
+- name: Start and enable CRI-O service
+  service:
+    name: crio
+    state: started
+    enabled: yes

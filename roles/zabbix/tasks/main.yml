@@ -1,0 +1,30 @@
+---
+# tasks file for zabbix
+- name: Add stable chart repo
+  kubernetes.core.helm_repository:
+    name: zabbix-community
+    repo_url: "https://zabbix-community.github.io/helm-zabbix"
+
+- name: Update Helm chart
+  shell: |
+    helm repo update
+  args:
+    executable: /bin/bash
+
+- name: Create the namespace
+  kubernetes.core.k8s:
+    kind: Namespace
+    name: monitoring
+    state: present
+
+- name: Copy zabbix yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/zabbix/files/zabbix_values.yaml.j2"
+    dest: "/home/acd/yaml/zabbix_values.yaml"
+    mode: '0644'
+
+- name: Install Jenkins Helm chart
+  shell: |
+    helm upgrade --install {{ zabbix_name }} zabbix-community/zabbix -f /home/acd/yaml/zabbix_values.yaml -n monitoring
+  args:
+    executable: /bin/bash

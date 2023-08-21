@@ -1,0 +1,123 @@
+---
+# tasks file for grafana
+- name: Add stable chart repo
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: "https://charts.bitnami.com/bitnami"
+
+- name: Create the namespace
+  kubernetes.core.k8s:
+    kind: Namespace
+    name: monitoring
+    state: present
+
+- name: Copy grafan yaml 
+  template:
+    src: "/home/acd/Desktop/ansible/roles/grafana/templates/grafana.yaml.j2"
+    dest: "/home/acd/yaml/grafana.yaml"
+    mode: '0644'
+
+- name: Copy pvc yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/grafana/templates/pvc-plugin.yaml.j2"
+    dest: "/home/acd/yaml/pvc-plugin.yaml"
+    mode: '0644'
+
+- name: Create custom resources
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/pvc-plugin.yaml"
+
+- name: Copy plugin 
+  copy:
+    src: "/home/acd/Desktop/alexanderzobnin-zabbix-app"
+    dest: "/home/acd/yaml"
+    mode: '0777'
+
+- name: Copy datasource
+  template:
+    src: "/home/acd/Desktop/ansible/roles/grafana/templates/datasource.yaml.j2"
+    dest: "/home/acd/yaml/datasource.yaml"
+    mode: '0777'
+
+- name: Copy dashboard
+  copy:
+    src: "/home/acd/Desktop/ansible/roles/grafana/files/dashboards.yaml"
+    dest: "/home/acd/yaml"
+    mode: '0777'
+
+- name: Copy master dashbourd
+  copy:
+    src: "/home/acd/Desktop/ansible/roles/grafana/files/MasterCMD.json"
+    dest: "/home/acd/yaml"
+    mode: '0777'
+
+- name: Sleep for 30 seconds and continue with play
+  ansible.builtin.wait_for:
+    timeout: 30
+  delegate_to: localhost
+    
+- name: Create Kubernetes Pod with PVC
+  k8s:
+    definition:
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: copy-pod
+        namespace: monitoring
+      spec:
+        containers:
+        - name: copy-container
+          image: nginx:latest  
+          volumeMounts:
+          - name: plugin-zabbix
+            mountPath: /mnt/copy
+          - name: datasources
+            mountPath: /mnt/data
+          - name: dashboards
+            mountPath: /mnt/dash
+        volumes:
+        - name: plugin-zabbix
+          persistentVolumeClaim:
+            claimName: plugin-zabbix  
+        - name: datasources
+          persistentVolumeClaim:
+            claimName: datasources 
+        - name: dashboards
+          persistentVolumeClaim:
+            claimName: dashboards 
+  register: pod_result
+
+- name: Sleep for 60 seconds and continue with play
+  ansible.builtin.wait_for:
+    timeout: 60
+  delegate_to: localhost
+
+- name: Copy directory to PVC
+  shell: kubectl cp /home/acd/yaml/alexanderzobnin-zabbix-app monitoring/copy-pod:/mnt/copy 
+
+- name: Copy directory to PVC
+  shell: kubectl cp /home/acd/yaml/datasource.yaml monitoring/copy-pod:/mnt/data/
+
+- name: Copy directory to PVC
+  shell: kubectl cp /home/acd/yaml/dashboards.yaml monitoring/copy-pod:/mnt/dash/
+
+- name: Copy directory to PVC
+  shell: kubectl cp /home/acd/yaml/MasterCMD.json monitoring/copy-pod:/mnt/dash/
+
+- name: Install Jenkins Helm chart
+  shell: |
+    helm install {{ grafana_name }} oci://registry-1.docker.io/bitnamicharts/grafana --namespace monitoring -f /home/acd/yaml/grafana.yaml
+  args:
+    executable: /bin/bash
+
+- name: Copy ingress yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/grafana/templates/ingress-grafana.yaml.j2"
+    dest: "/home/acd/yaml/ingress-grafana.yaml"
+    mode: '0644'
+
+- name: Create custom resources
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/ingress-grafana.yaml"
+
+  

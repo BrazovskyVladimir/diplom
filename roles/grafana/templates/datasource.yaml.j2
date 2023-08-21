@@ -1,0 +1,27 @@
+apiVersion: 1
+
+datasources:
+  - name: Zabbix
+    type: alexanderzobnin-zabbix-datasource
+    access: proxy
+    url: http://{{ zabbix_name }}-zabbix-web/api_jsonrpc.php
+    isDefault: true
+    jsonData:
+      trends: true
+      trendsFrom: "7d"
+      trendsRange: "4d"
+      cacheTTL: "1h"
+      alerting: true
+      addThresholds: false
+      alertingMinSeverity: 3
+      disableReadOnlyUsersAck: true
+      disableDataAlignment: false
+      useZabbixValueMapping: true
+      tlsSkipVerify: true
+      # Zabbix API credentials
+      username: Admin
+      password: zabbix
+  - name: Prometheus
+    type: prometheus
+    url: http://{{ prometheus_name }}-server
+    access: proxy

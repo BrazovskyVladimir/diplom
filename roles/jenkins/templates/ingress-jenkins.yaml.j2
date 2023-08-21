@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-jenkins
+  namespace: jenkins-ns
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: {{ jenkins_server_name }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ jenkins_name }}
+            port:
+              number: 80

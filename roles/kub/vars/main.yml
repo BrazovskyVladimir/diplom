@@ -1,0 +1,5 @@
+---
+# vars file for kub
+#OS: {{ OS }}
+#CRIO_VERSION: {{ CRIO_VERSION }}
+#kube_version: {{ kube_version }}

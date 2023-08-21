@@ -1,0 +1,121 @@
+---
+# tasks file for zabbixconf
+- name: Copy zabbix conf
+  template:
+    src: "/home/acd/Desktop/ansible/roles/zabbixconf/templates/import.xml.j2"
+    dest: "/home/acd/yaml/import.xml"
+    mode: '0644'
+
+- name: Wait for control-plane pods become ready2
+  shell: "kubectl rollout status deployment {{ zabbix_name }}-zabbix-web -n monitoring"
+
+
+- name: Wait for control-plane pods become ready2
+  shell: "kubectl rollout status deployment {{ zabbix_name }}-zabbix-server -n monitoring"
+
+- name: Sleep for 120 seconds and continue with play
+  ansible.builtin.wait_for:
+    timeout: 120
+  delegate_to: localhost
+
+- name: Authenticate with Zabbix API and Get Token
+  uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    headers:
+      Content-Type: "application/json-rpc"
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      method: "user.login"
+      params:
+        user: "{{ zabbix_user }}"
+        password: "{{ zabbix_password }}"
+      id: 1
+    return_content: yes
+  register: api_response
+
+- name: Sleep for 300 seconds and continue with play
+  ansible.builtin.wait_for:
+    timeout: 120
+  delegate_to: localhost
+
+- name: Show the Generated Token 
+  ansible.builtin.debug:
+    msg: "{{ api_response.json.result }}"
+
+- name: Save Zabbix Token to File
+  ansible.builtin.copy:
+    content: "{{ api_response.json.result }}"
+    dest: "{{ token_file_path }}"
+
+- name: Show the Generated Token 
+  ansible.builtin.debug:
+    msg: "Zabbix Token: {{ api_response.json.result }}"
+
+- name: Read XML Configuration File Content
+  ansible.builtin.slurp:
+    src: "{{ xml_configuration_file }}"
+  register: xml_content
+
+- name: Import Configuration via Zabbix API
+  uri:
+    url: "{{ zabbix_api_url }}"
+    method: POST
+    headers:
+      Content-Type: "application/json-rpc"
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      method: "configuration.import"
+      params:
+        format: "xml"
+        rules:
+          hosts:
+            createMissing: true
+            updateExisting: true
+          templates:
+            createMissing: true
+            updateExisting: true
+          templateLinkage:
+            createMissing: true
+            deleteMissing: true
+        source: "{{ xml_content.content | b64decode }}"
+      auth: "{{ api_response.json.result }}"
+      id: 1
+    return_content: yes
+  register: api_response
+
+- name: Display API Response (Optional)
+  debug:
+    var: api_response.json
+
+- name: Install Zabbix Agent
+  ansible.builtin.apt:
+    name: zabbix-agent
+    state: present
+
+- name: Start Zabbix Agent service and enable it at boot
+  ansible.builtin.service:
+    name: zabbix-agent
+    state: started
+    enabled: yes
+
+- name: Set Zabbix Server Address
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/zabbix_agentd.conf  
+    regexp: '^Server='
+    line: 'Server=0.0.0.0/0'
+    state: present
+
+- name: Set Zabbix ServerActive Address
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/zabbix_agentd.conf  
+    regexp: '^ServerActive='
+    line: 'ServerActive={{ kub_server }}:31420'
+    state: present
+
+- name: Start Zabbix Agent service and enable it at boot
+  ansible.builtin.service:
+    name: zabbix-agent
+    state: restarted

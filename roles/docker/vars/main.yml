@@ -1,0 +1,5 @@
+---
+# vars file for docker
+OS: "xUbuntu_22.04"
+CRIO_VERSION: "1.26"
+kube_version: "1.26.6"

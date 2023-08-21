@@ -1,0 +1,10 @@
+---
+# handlers file for kub
+
+- name: Restart kubelet
+  service:
+    name: kubelet
+    state: restarted
+
+- name: Reboot the system
+  command: shutdown -r now

@@ -1,0 +1,8 @@
+---
+# vars file for zabbixconf
+zabbix_api_url: "http://{{ kub_server }}:{{ zabbix_web_port }}/api_jsonrpc.php"
+api_token: "***"
+xml_configuration_file: "/home/acd/yaml/import.xml"
+zabbix_user: "Admin"
+zabbix_password: "zabbix"
+token_file_path: "./zabbix_token.txt"

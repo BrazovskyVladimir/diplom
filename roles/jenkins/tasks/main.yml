@@ -1,0 +1,206 @@
+---
+# tasks file for jenkins
+- name: Add stable chart repo
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: "https://charts.bitnami.com/bitnami"
+
+- name: Create the namespace jenkins-ns
+  kubernetes.core.k8s:
+    kind: Namespace
+    name: jenkins-ns
+    state: present
+
+- name: Copy yaml jenkins.yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/jenkins/templates/jenkins.yaml.j2"
+    dest: "/home/acd/yaml/jenkins.yaml"
+    mode: '0644'
+
+- name: Create Kubernetes secret
+  k8s_secret:
+    name: admin-conf-secret
+    namespace: jenkins-ns
+    src: /home/acd/.kube/config
+    state: present
+
+- name: Create Docker registry secret
+  k8s_secret:
+    name: dockercred
+    namespace: jenkins-ns
+    type: kubernetes.io/dockerconfigjson
+    data:
+      .dockerconfigjson: "{{ lookup('template', 'dockerconfigjson.j2') }}"
+    state: present
+
+- name: Copy yaml ingress-jenkins.yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/jenkins/templates/ingress-jenkins.yaml.j2"
+    dest: "/home/acd/yaml/ingress-jenkins.yaml"
+    mode: '0644'
+
+- name: Create custom resources
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/ingress-jenkins.yaml"
+
+- name: Copy yaml rbac.yaml
+  copy:
+    src: "/home/acd/Desktop/ansible/roles/jenkins/files/rbac.yaml"
+    dest: "/home/acd/yaml"
+    mode: '0644'
+
+- name: Create custom resources
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/rbac.yaml"
+  
+- name: Copy yaml jenkins-pvc.yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/jenkins/templates/jenkins-pvc.yaml.j2"
+    dest: "/home/acd/yaml/jenkins-pvc.yaml"
+    mode: '0644'
+
+- name: Create custom resources jenkins pvc
+  kubernetes.core.k8s:
+    src: "/home/acd/yaml/jenkins-pvc.yaml"
+
+- name: Copy plugins
+  copy:
+    src: "/home/acd/Desktop/ansible/roles/jenkins/files/plugins/"
+    dest: "/home/acd/yaml/plugins/"
+
+- name: Sleep for 300 seconds and continue with play
+  ansible.builtin.wait_for:
+    timeout: 10
+  delegate_to: localhost
+    
+- name: Create Kubernetes Pod with PVC
+  k8s:
+    definition:
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: copy-pod-2
+        namespace: jenkins-ns
+      spec:
+        containers:
+        - name: copy-container-2
+          image: nginx:latest  # Replace with the image you want to use
+          volumeMounts:
+          - name: plugin-jenkins
+            mountPath: /mnt/copy
+          - name: jobs-jenkins
+            mountPath: /mnt/calc
+        volumes:
+        - name: plugin-jenkins
+          persistentVolumeClaim:
+            claimName: plugin-jenkins 
+        - name: jobs-jenkins
+          persistentVolumeClaim:
+            claimName: jobs-jenkins 
+  register: pod_result
+
+- name: Sleep for 300 seconds and continue with play
+  ansible.builtin.wait_for:
+    timeout: 100
+  delegate_to: localhost
+
+- name: Copy directory to PVC
+  shell: "kubectl cp /home/acd/yaml/plugins/{{ item }} jenkins-ns/copy-pod-2:/mnt/copy/"
+  with_items:
+    - configuration-as-code.hpi
+    - caffeine-api.hpi
+    - commons-text-api.hpi
+    - snakeyaml-api.hpi
+    - commons-lang3-api.hpi
+    - github.hpi
+    - kubernetes.hpi
+    - authentication-tokens.hpi
+    - cloudbees-folder.hpi
+    - credentials-binding.hpi
+    - credentials.hpi 
+    - display-url-api.hpi
+    - durable-task.hpi
+    - git.hpi
+    - github-api.hpi
+    - github.hpi
+    - jackson2-api.hpi
+    - kubernetes-client-api.hpi
+    - kubernetes-credentials.hpi
+    - metrics.hpi
+    - okhttp-api.hpi
+    - plain-credentials.hpi
+    - scm-api.hpi
+    - structs.hpi
+    - token-macro.hpi
+    - variant.hpi
+    - workflow-api.hpi
+    - workflow-durable-task-step.hpi
+    - workflow-step-api.hpi
+    - ssh-credentials.hpi
+    - jaxb.hpi
+    - instance-identity.hpi
+    - workflow-scm-step.hpi
+    - apache-httpcomponents-client-4-api.hpi
+    - workflow-support.hpi
+    - script-security.hpi
+    - ionicons-api.hpi
+    - javax-activation-api.hpi
+    - trilead-api.hpi
+    - bouncycastle-api.hpi
+    - git-client.hpi
+    - mailer.hpi
+    - mina-sshd-api-common.hpi 
+    - mina-sshd-api-core.hpi
+    - jakarta-mail-api.hpi
+    - jakarta-activation-api.hpi
+    - workflow-aggregator.hpi
+    - workflow-job.hpi
+    - pipeline-milestone-step.hpi
+    - pipeline-build-step.hpi
+    - pipeline-groovy-lib.hpi
+    - pipeline-input-step.hpi
+    - workflow-cps.hpi
+    - pipeline-model-definition.hpi
+    - pipeline-stage-step.hpi
+    - workflow-basic-steps.hpi
+    - pipeline-model-api.hpi
+    - pipeline-model-extensions.hpi
+    - pipeline-stage-tags-metadata.hpi
+    - workflow-multibranch.hpi
+    - branch-api.hpi
+
+- name: Install Jenkins Helm chart
+  shell: |
+    helm install {{ jenkins_name }} oci://registry-1.docker.io/bitnamicharts/jenkins --namespace jenkins-ns -f /home/acd/yaml/jenkins.yaml
+  args:
+    executable: /bin/bash
+
+- name: Add jenkins-diplom.local entry to hosts file
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ kub_server}} {{ jenkins_server_name }}"  
+    state: present
+
+- name: Create a jenkins job using basic authentication
+  jenkins_job:
+    config: "{{ lookup('file', '/home/acd/Desktop/ansible/roles/jenkins/files/calc/config.xml') }}"
+    name: calc
+    password: user123
+    url: http://{{ jenkins_server_name }}/
+    user: user
+
+- name: Create a jenkins job using basic authentication
+  jenkins_job:
+    config: "{{ lookup('file', '/home/acd/Desktop/ansible/roles/jenkins/files/calcdeploy/config.xml') }}"
+    name: calcdeploy
+    password: user123
+    url: http://{{ jenkins_server_name }}/
+    user: user
+
+- name: Create a jenkins job using basic authentication
+  jenkins_job:
+    config: "{{ lookup('file', '/home/acd/Desktop/ansible/roles/jenkins/files/calcdeploy2/config.xml') }}"
+    name: calcdeploy2
+    password: user123
+    url: http://{{ jenkins_server_name }}/
+    user: user

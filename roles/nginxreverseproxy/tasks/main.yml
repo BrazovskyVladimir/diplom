@@ -1,0 +1,34 @@
+---
+- name: Install Nginx package
+  apt:
+    name: nginx
+    state: present
+
+- name: Copy nginx.conf to remote host
+  template:
+    src: /home/acd/Desktop/ansible/roles/nginxreverseproxy/templates/grafana.conf.j2  
+    dest: /etc/nginx/conf.d/grafana.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Copy nginx.conf to remote host
+  template:
+    src: /home/acd/Desktop/ansible/roles/nginxreverseproxy/templates/jenkins.conf.j2 
+    dest: /etc/nginx/conf.d/jenkins.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Copy nginx.conf to remote host
+  template:
+    src: /home/acd/Desktop/ansible/roles/nginxreverseproxy/templates/calc-diplom.conf.j2
+    dest: /etc/nginx/conf.d/calc-diplom.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Restart Nginx
+  service:
+    name: nginx
+    state: restarted

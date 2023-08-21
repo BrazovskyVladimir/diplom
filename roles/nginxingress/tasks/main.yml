@@ -1,0 +1,24 @@
+---
+- name: Add stable chart repo
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: "https://charts.bitnami.com/bitnami"
+
+- name: Create the namespace
+  kubernetes.core.k8s:
+    kind: Namespace
+    name: ingress-nginx
+    state: present
+
+- name: Copy nginx ingress yaml
+  template:
+    src: "/home/acd/Desktop/ansible/roles/nginxingress/templates/nic.yaml.j2"
+    dest: "/home/acd/yaml/nic.yaml"
+    mode: '0644'
+
+- name: Install Jenkins Helm chart
+  shell: |
+    helm install my-nginx oci://registry-1.docker.io/bitnamicharts/nginx-ingress-controller --namespace ingress-nginx -f /home/acd/yaml/nic.yaml
+  args:
+    executable: /bin/bash
+

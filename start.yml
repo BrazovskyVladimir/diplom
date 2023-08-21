@@ -8,14 +8,14 @@
     kube_version: "1.26.6"
     USER_RUN: "acd"
   roles:
-  #  - docker  
-  #  - kub
-  #  - nginxingress
-  #  - nginxreverseproxy
+    - docker  
+    - kub
+    - nginxingress
+    - nginxreverseproxy
     - jenkins
-  #  - prometheus
-  #  - grafana
-  #  - zabbix
-  #  - zabbixconf
+    - prometheus
+    - grafana
+    - zabbix
+    - zabbixconf
 #    - prometheusconf
   #  - test
